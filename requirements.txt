@@ -1,0 +1,10 @@
+flask
+flask-socketio
+scikit-learn
+pandas
+numpy
+opencv-python
+opencv-contrib-python
+tensorflow
+vosk
+speechbrain

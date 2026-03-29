@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Smart Home AI - Control your home with AI/ML powered features including fan speed prediction, emotion mood lighting, face recognition door, and voice control.">
+    <title>Smart Home AI — Powered by AI/ML</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.4/socket.io.min.js"></script>
+</head>
+<body>
+
+<div class="app-container">
+
+    <!-- ═══════════════════════════════════════════════════════════
+         HOME SCREEN
+         ═══════════════════════════════════════════════════════════ -->
+    <div id="page-home" class="page active">
+        <div class="home-header">
+            <h1 class="home-title" id="app-title">Smart Home AI</h1>
+            <p class="home-subtitle">Powered by AI / ML</p>
+        </div>
+
+        <div class="home-grid">
+            <div class="home-card" id="card-fan" onclick="navigateTo('fan')">
+                <span class="home-card-icon">🌀</span>
+                <h3 class="home-card-title">Fan Speed Control</h3>
+                <p class="home-card-desc">AI predicts optimal fan speed based on room temperature</p>
+            </div>
+
+            <div class="home-card" id="card-emotion" onclick="navigateTo('emotion')">
+                <span class="home-card-icon">💡</span>
+                <h3 class="home-card-title">Emotion Mood Lighting</h3>
+                <p class="home-card-desc">Detects emotions and creates healing light ambiance</p>
+            </div>
+
+            <div class="home-card" id="card-face" onclick="navigateTo('face')">
+                <span class="home-card-icon">🚪</span>
+                <h3 class="home-card-title">Face Recognition Door</h3>
+                <p class="home-card-desc">Secure door access using facial recognition</p>
+            </div>
+
+            <div class="home-card" id="card-voice" onclick="navigateTo('voice')">
+                <span class="home-card-icon">🎤</span>
+                <h3 class="home-card-title">Voice Control</h3>
+                <p class="home-card-desc">Control devices with your voice commands</p>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- ═══════════════════════════════════════════════════════════
+         FEATURE 1 — FAN SPEED CONTROL
+         ═══════════════════════════════════════════════════════════ -->
+    <div id="page-fan" class="page">
+        <div class="page-header" style="justify-content: center; text-align: center; border-bottom: none; margin-bottom: 16px;">
+            <div class="page-header-text">
+                <h2 style="font-size: 2.2rem; color: var(--accent-green);">Fan Speed Prediction</h2>
+                <p style="font-size: 1rem; color: var(--text-secondary);">AI-driven optimal cooling derived via Decision Tree Architecture</p>
+            </div>
+        </div>
+
+        <div class="card" style="text-align: center;">
+            <div class="card-title">Enter Temperature</div>
+            <div class="input-group" style="justify-content: center;">
+                <input type="number" id="temp-input" class="input-field" 
+                       placeholder="Enter temperature in °C" min="0" max="60" step="1">
+                <button class="btn btn-primary" id="predict-fan-btn" onclick="predictFanSpeed()">
+                    Initialize Prediction
+                </button>
+            </div>
+        </div>
+
+        <div id="fan-result" style="display: none;">
+            <div id="fan-loader" class="loader">
+                <div class="spinner"></div>
+                <div class="loader-text">Predicting fan speed...</div>
+            </div>
+
+            <div id="fan-result-content" class="result-section" style="display: none;">
+                <div class="fan-container">
+                    <div class="fan-visual">
+                        <div class="fan-hub"></div>
+                        <div class="fan-blades" id="fan-blades">
+                            <div class="fan-blade"></div>
+                            <div class="fan-blade"></div>
+                            <div class="fan-blade"></div>
+                            <div class="fan-blade"></div>
+                            <div class="fan-blade"></div>
+                        </div>
+                    </div>
+
+                    <div class="fan-speed-display">
+                        <div class="fan-speed-number" id="fan-speed-num">—</div>
+                        <div class="fan-speed-label" id="fan-speed-label">Enter temperature to predict</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="action-buttons" style="justify-content: center; margin-top: 40px;">
+            <button class="btn btn-secondary" onclick="goHome()">Back to Dashboard</button>
+            <button class="btn btn-secondary" onclick="resetFan()">Compute Again</button>
+        </div>
+    </div>
+
+
+    <!-- ═══════════════════════════════════════════════════════════
+         FEATURE 2 — EMOTION MOOD LIGHTING
+         ═══════════════════════════════════════════════════════════ -->
+    <div id="page-emotion" class="page">
+        <div class="page-header" style="justify-content: center; text-align: center; border-bottom: none; margin-bottom: 16px;">
+            <div class="page-header-text">
+                <h2 style="font-size: 2.2rem; color: var(--accent-green);">Emotion Mood Lighting</h2>
+                <p style="font-size: 1rem; color: var(--text-secondary);">AI detects your emotion via webcam and creates dynamic light ambiance</p>
+            </div>
+        </div>
+
+        <div class="emotion-layout">
+            <!-- Webcam Side -->
+            <div class="emotion-input-section">
+                <div class="webcam-container">
+                    <video id="emotion-video" autoplay muted playsinline></video>
+                    <canvas id="emotion-canvas" class="webcam-canvas-overlay"></canvas>
+                </div>
+
+                <div class="action-buttons" style="justify-content: center;">
+                    <button class="btn btn-primary" id="emotion-start-btn" onclick="startEmotionDetection()">
+                        Start Detection
+                    </button>
+                    <button class="btn btn-danger hidden" id="emotion-stop-btn" onclick="stopEmotionDetection()">
+                        Stop
+                    </button>
+                </div>
+            </div>
+
+            <!-- Room Side -->
+            <div>
+                <div class="room-container" id="emotion-room">
+                    <div class="room-bulb">
+                        <div class="bulb-wire"></div>
+                        <div class="bulb-body" id="emotion-bulb"></div>
+                        <div class="bulb-base"></div>
+                    </div>
+
+                    <div id="emotion-result" class="emotion-result hidden">
+                        <div class="emotion-name" id="emotion-name"></div>
+                        <div class="emotion-message" id="emotion-message"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="action-buttons" style="justify-content: center; margin-top: 40px;">
+            <button class="btn btn-secondary" onclick="goHome()">Back to Dashboard</button>
+            <button class="btn btn-secondary" onclick="resetEmotion()">Compute Again</button>
+        </div>
+    </div>
+
+
+    <!-- ═══════════════════════════════════════════════════════════
+         FEATURE 3 — FACE RECOGNITION DOOR
+         ═══════════════════════════════════════════════════════════ -->
+    <div id="page-face" class="page">
+        <div class="page-header" style="justify-content: center; text-align: center; border-bottom: none; margin-bottom: 16px;">
+            <div class="page-header-text">
+                <h2 style="font-size: 2.2rem; color: var(--accent-green);">Face Recognition Door</h2>
+                <p style="font-size: 1rem; color: var(--text-secondary);">Secure access using LBPH face recognition protocol</p>
+            </div>
+        </div>
+
+        <!-- Main Face Recognition Section -->
+        <div id="face-main-section">
+            <div class="face-layout">
+            <!-- Webcam -->
+            <div>
+                <div class="webcam-container" style="position: relative;">
+                    <video id="face-video" autoplay muted playsinline></video>
+                    <canvas id="face-canvas" class="webcam-canvas-overlay"></canvas>
+                    <div class="scan-line" id="face-scan-line"></div>
+                </div>
+                <div class="action-buttons" style="justify-content: center;">
+                    <button class="btn btn-primary" id="face-scan-btn" onclick="startFaceScan()">
+                        Start Scan
+                    </button>
+                </div>
+            </div>
+
+            <!-- Door Animation -->
+            <div>
+                <div class="door-container" id="door-frame-el">
+                    <div class="door-indicator" id="door-indicator"></div>
+                    <div class="door-frame">
+                        <div class="door-left" id="door-left">
+                            <div class="door-handle"></div>
+                        </div>
+                        <div class="door-right" id="door-right">
+                            <div class="door-handle"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="face-result-msg" class="face-result-msg hidden"></div>
+            </div>
+        </div>
+
+            <div class="action-buttons" style="justify-content: center; margin-top: 40px;">
+                <button class="btn btn-secondary" onclick="goHome()">Back to Dashboard</button>
+                <button class="btn btn-secondary" onclick="resetFaceScan()">Compute Again</button>
+                <button class="btn btn-secondary" onclick="toggleFaceRegPage()">Manage Profiles</button>
+            </div>
+        </div>
+
+        <!-- Face Registration Section -->
+        <div id="face-registration-section" class="hidden">
+            <div class="page-header" style="justify-content: center; text-align: center; border-bottom: none; margin-bottom: 16px;">
+                <div class="page-header-text">
+                    <h2 style="font-size: 2.2rem; color: var(--accent-green);">Face System Config</h2>
+                    <p style="font-size: 1rem; color: var(--text-secondary);">Register allowed faces for secure access</p>
+                </div>
+            </div>
+
+            <div class="card mb-3" id="face-admin-section" style="text-align: center;">
+                <div class="card-title">Admin Panel — Manage Faces</div>
+                
+                <!-- Password Gate -->
+                <div id="face-password-gate">
+                    <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 12px;">
+                        Enter admin password to manage registered faces
+                    </p>
+                    <div class="input-group" style="justify-content: center;">
+                        <input type="password" id="face-admin-password" class="input-field" 
+                               placeholder="Enter admin password" style="max-width: 250px;">
+                        <button class="btn btn-primary btn-sm" onclick="unlockFaceRegistration()">
+                            Unlock
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Registration Panel (hidden until password is correct) -->
+                <div id="face-reg-panel" class="hidden">
+                    <div class="mb-2">
+                        <span class="badge badge-success">Admin Access Granted</span>
+                    </div>
+
+                    <!-- Registered People List -->
+                    <div class="card-title" style="font-size: 0.95rem; margin-top: 16px;">Registered People</div>
+                    <div id="face-registered-list" class="mb-3">
+                        <span class="badge badge-info">Loading...</span>
+                    </div>
+
+                    <!-- Register New Person -->
+                    <div class="card-title" style="font-size: 0.95rem; margin-top: 16px;">Register New Person</div>
+                    <div class="input-group mb-2" style="justify-content: center;">
+                        <input type="text" id="face-register-name" class="input-field" 
+                               placeholder="Enter person name" style="max-width: 200px;">
+                    </div>
+
+                    <!-- Two registration methods -->
+                    <div style="display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin-bottom: 10px;">
+                        <button class="btn btn-primary btn-sm" onclick="registerFaceFromWebcam()">
+                            Capture from Webcam
+                        </button>
+                        <label class="btn btn-secondary btn-sm" style="cursor: pointer; margin: 0;">
+                            Upload Photo
+                            <input type="file" id="face-upload-input" accept="image/*" multiple
+                                   onchange="registerFaceFromUpload(event)" style="display: none;">
+                        </label>
+                    </div>
+
+                    <div id="face-reg-status" style="color: var(--text-muted); font-size: 0.85rem; min-height: 20px;"></div>
+
+                    <p class="mt-1" style="color: var(--text-muted); font-size: 0.8rem;">
+                        💡 <strong>Upload</strong> gives better accuracy. Add 3-5 clear face photos per person.<br>
+                        📸 <strong>Webcam</strong>: Start scan first, then capture. Good lighting recommended.
+                    </p>
+
+                    <!-- Clear All Button -->
+                    <div class="mt-2 text-center">
+                        <button class="btn btn-danger btn-sm" onclick="removeAllFaces()">
+                            Remove All Profiles
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="action-buttons" style="justify-content: center; margin-top: 40px;">
+                <button class="btn btn-secondary" onclick="toggleFaceRegPage()">Return to Scanner</button>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- ═══════════════════════════════════════════════════════════
+         FEATURE 4 — VOICE CONTROL
+         ═══════════════════════════════════════════════════════════ -->
+    <div id="page-voice" class="page">
+
+        <!-- Main Voice Section -->
+        <div id="voice-main-section">
+            <div class="page-header" style="justify-content: center; text-align: center; border-bottom: none; margin-bottom: 16px;">
+                <div class="page-header-text">
+                    <h2 style="font-size: 2.2rem; color: var(--accent-green);">Voice Control</h2>
+                    <p style="font-size: 1rem; color: var(--text-secondary);">Control devices with voice commands (English + Hindi)</p>
+                </div>
+            </div>
+
+            <div class="voice-layout">
+                <!-- Voice Command Input -->
+                <div class="voice-command-input" style="text-align: center; margin-bottom: 20px;">
+                    <button class="btn btn-primary btn-pulse" id="voice-listen-btn" 
+                            style="border-radius: 50%; width: 120px; height: 120px; font-size: 1.2rem; font-weight: 700; display: flex; align-items: center; justify-content: center; margin: 0 auto; user-select: none; transition: all 0.2s ease;" 
+                            onclick="toggleVoiceCommand()">
+                        SPEAK
+                    </button>
+                    <p id="voice-listen-status" style="margin-top: 10px; color: var(--text-muted); font-weight: 500;">Click to speak</p>
+                </div>
+
+                <p style="color: var(--text-muted); font-size: 0.8rem; text-align: center; margin-bottom: 20px;">
+                    Commands: turn on/off fan, turn on/off light, open/close door
+                </p>
+
+                <!-- You Said Box -->
+                <div class="card mb-3" style="text-align: center; background: var(--surface-2);">
+                    <div style="color: var(--text-muted); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 5px;">You Said:</div>
+                    <div id="voice-said-text" style="font-size: 1.2rem; font-weight: 500; color: var(--accent-primary);">—</div>
+                </div>
+
+                <!-- Device Cards -->
+                <div class="device-cards">
+                    <div class="device-card" id="device-fan">
+                        <div class="device-card-name">Fan</div>
+                        <div class="device-card-status">OFF</div>
+                    </div>
+
+                    <div class="device-card" id="device-light">
+                        <div class="device-card-name">Light</div>
+                        <div class="device-card-status">OFF</div>
+                    </div>
+
+                    <div class="device-card" id="device-door">
+                        <div class="device-card-name">Door</div>
+                        <div class="device-card-status">CLOSED</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="action-buttons" style="justify-content: center; margin-top: 40px;">
+                <button class="btn btn-secondary" onclick="goHome()">Back to Dashboard</button>
+                <button class="btn btn-secondary" onclick="resetVoice()">Compute Again</button>
+                <button class="btn btn-secondary" onclick="toggleVoiceRegPage()">
+                    Manage Profiles
+                </button>
+            </div>
+        </div>
+
+        <!-- Voice Registration Section -->
+        <div id="voice-registration-section" class="hidden">
+            <div class="page-header" style="justify-content: center; text-align: center; border-bottom: none; margin-bottom: 16px;">
+                <div class="page-header-text">
+                    <h2 style="font-size: 2.2rem; color: var(--accent-green);">Voice System Config</h2>
+                    <p style="font-size: 1rem; color: var(--text-secondary);">Register allowed voices (max 3 people)</p>
+                </div>
+            </div>
+
+            <!-- Password Gate for Voice Registration -->
+            <div id="voice-password-gate" class="card mb-3" style="text-align: center;">
+                <div class="card-title">Admin Panel — Manage Voices</div>
+                <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 12px;">
+                    Enter admin password to manage registered voices
+                </p>
+                <div class="input-group" style="justify-content: center;">
+                    <input type="password" id="voice-admin-password" class="input-field" 
+                           placeholder="Enter admin password" style="max-width: 250px;">
+                    <button class="btn btn-primary btn-sm" onclick="unlockVoiceRegistration()">
+                        Unlock
+                    </button>
+                </div>
+            </div>
+
+            <div id="voice-reg-panel" class="voice-layout hidden">
+                <div class="mb-3 text-center">
+                    <span class="badge badge-info" id="voice-reg-count">0/3 registered</span>
+                </div>
+
+                <!-- Registration Slots -->
+                <div class="registration-slots" id="voice-reg-slots">
+                    <div class="reg-slot">
+                        <div class="reg-slot-name reg-slot-empty">Loading...</div>
+                    </div>
+                </div>
+
+                <div class="mt-2 text-center" style="margin-bottom: 20px;">
+                    <button class="btn btn-danger btn-sm" onclick="removeAllVoices()">
+                        Remove All Profiles
+                    </button>
+                </div>
+
+                <!-- Registration Form -->
+                <div id="voice-reg-form" class="card hidden" style="width: 100%; max-width: 500px; margin: 0 auto; text-align: center;">
+                    <div class="card-title">Register Voice Profile</div>
+                    <div class="input-group mb-2" style="justify-content: center;">
+                        <input type="text" id="voice-reg-name" class="input-field" 
+                               placeholder="Enter person name">
+                    </div>
+                    
+                    <div style="background: var(--surface-2); padding: 12px; border-radius: 8px; margin-bottom: 16px;">
+                        <p style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; font-weight: 500;">
+                            Please read the following sentences clearly:
+                        </p>
+                        <ul style="color: var(--text-muted); font-size: 0.85rem; padding-left: 20px; line-height: 1.5; margin: 0;">
+                            <li>"Hello, I am setting up my voice profile."</li>
+                            <li>"Turn on the fan and turn on the light."</li>
+                            <li>"Please open the door for me."</li>
+                            <li>"Smart home, turn off all devices."</li>
+                        </ul>
+                    </div>
+
+                    <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 16px;">
+                        Click Start Recording, then read the sentences above. Recording will auto-stop after 15 seconds.
+                    </p>
+                    <button class="btn btn-primary" id="voice-rec-btn" onclick="toggleVoiceRecording()">
+                        Start Recording
+                    </button>
+                    <div id="voice-reg-status" style="margin-top: 10px; color: var(--accent-red); font-size: 0.85rem;"></div>
+                </div>
+            </div>
+
+            <div class="action-buttons" style="justify-content: center; margin-top: 40px;">
+                <button class="btn btn-secondary" onclick="toggleVoiceRegPage()">Return to Command Center</button>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<script src="/static/js/app.js"></script>
+</body>
+</html>

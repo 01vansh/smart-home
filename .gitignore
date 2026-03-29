@@ -1,0 +1,31 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Mac OS generated files
+.DS_Store
+
+# Smart Home Data Storage
+known_faces/*
+!known_faces/.gitkeep
+known_voices/*
+!known_voices/.gitkeep
+models/face_model.yml
+
+# Virtual environments
+venv/
+env/
+.env
+.venv/
+
+# Large datasets or raw downloads
+emotion face detectio/
+*.zip
+*.tar.gz
+*.mp3
+*.wav
+
+# IDE folders
+.vscode/
+.idea/

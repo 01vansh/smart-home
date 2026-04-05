@@ -10,6 +10,7 @@ Routes for all 4 features:
 import os
 import sys
 import json
+import requests
 
 # Fix Windows encoding
 os.environ['PYTHONIOENCODING'] = 'utf-8'
@@ -22,6 +23,8 @@ from flask_socketio import SocketIO
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'smart-home-ai-secret'
+app.config['TEMPLATES_AUTO_RELOAD'] = True
+app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
 
 # ─── Import ML modules ───────────────────────────────────────────────
@@ -84,6 +87,87 @@ def predict_fan():
             return jsonify({"success": False, "message": "Model not ready", "error": "Model not ready"}), 503
     except Exception as e:
         return jsonify({"success": False, "message": str(e), "error": str(e)}), 500
+
+
+@app.route('/live_temperature', methods=['POST'])
+def live_temperature():
+    """Fetch live temperature from Open-Meteo API using device GPS coordinates."""
+    try:
+        data = request.get_json()
+        lat = data.get('latitude')
+        lon = data.get('longitude')
+
+        if lat is None or lon is None:
+            return jsonify({"success": False, "error": "Latitude and longitude are required"}), 400
+
+        # Fetch current weather from Open-Meteo (free, no API key needed)
+        weather_url = (
+            f"https://api.open-meteo.com/v1/forecast"
+            f"?latitude={lat}&longitude={lon}"
+            f"&current=temperature_2m,relative_humidity_2m,apparent_temperature,wind_speed_10m,weather_code"
+            f"&timezone=auto"
+        )
+        weather_res = requests.get(weather_url, timeout=10)
+        weather_data = weather_res.json()
+
+        if 'current' not in weather_data:
+            return jsonify({"success": False, "error": "Could not fetch weather data"}), 502
+
+        current = weather_data['current']
+        temperature = current.get('temperature_2m', 0)
+        humidity = current.get('relative_humidity_2m', 0)
+        apparent_temp = current.get('apparent_temperature', temperature)
+        wind_speed = current.get('wind_speed_10m', 0)
+        weather_code = current.get('weather_code', 0)
+        timezone = weather_data.get('timezone', 'Unknown')
+
+        # Reverse geocode for location name (Open-Meteo geocoding)
+        location_name = f"{round(float(lat), 2)}°, {round(float(lon), 2)}°"
+        try:
+            geo_url = f"https://geocoding-api.open-meteo.com/v1/search?latitude={lat}&longitude={lon}&count=1"
+            # Use a simple nominatim-style reverse geocode instead
+            reverse_url = f"https://nominatim.openstreetmap.org/reverse?lat={lat}&lon={lon}&format=json&zoom=10"
+            geo_res = requests.get(reverse_url, timeout=5, headers={'User-Agent': 'SmartHomeAI/1.0'})
+            geo_data = geo_res.json()
+            if 'address' in geo_data:
+                addr = geo_data['address']
+                city = addr.get('city', addr.get('town', addr.get('village', addr.get('state', ''))))
+                country = addr.get('country', '')
+                location_name = f"{city}, {country}" if city else location_name
+        except Exception:
+            pass  # Keep coordinate-based name if reverse geocoding fails
+
+        # Map weather codes to descriptions
+        weather_descriptions = {
+            0: 'Clear Sky', 1: 'Mainly Clear', 2: 'Partly Cloudy', 3: 'Overcast',
+            45: 'Foggy', 48: 'Rime Fog', 51: 'Light Drizzle', 53: 'Moderate Drizzle',
+            55: 'Dense Drizzle', 61: 'Slight Rain', 63: 'Moderate Rain', 65: 'Heavy Rain',
+            71: 'Slight Snow', 73: 'Moderate Snow', 75: 'Heavy Snow', 80: 'Rain Showers',
+            81: 'Moderate Rain Showers', 82: 'Violent Rain Showers',
+            95: 'Thunderstorm', 96: 'Thunderstorm with Hail', 99: 'Thunderstorm with Heavy Hail'
+        }
+        weather_desc = weather_descriptions.get(weather_code, 'Unknown')
+
+        # Run fan prediction on the live temperature
+        fan_result = fan_predictor.predict(temperature)
+
+        return jsonify({
+            "success": True,
+            "temperature": round(temperature, 1),
+            "humidity": humidity,
+            "apparent_temperature": round(apparent_temp, 1),
+            "wind_speed": round(wind_speed, 1),
+            "weather_description": weather_desc,
+            "weather_code": weather_code,
+            "location": location_name,
+            "timezone": timezone,
+            "fan_prediction": fan_result
+        })
+
+    except requests.exceptions.Timeout:
+        return jsonify({"success": False, "error": "Weather API timeout. Try again."}), 504
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
 
 
 # ─── Feature 2: Emotion Detection ────────────────────────────────────

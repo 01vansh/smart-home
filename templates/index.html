@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="Smart Home AI - Control your home with AI/ML powered features including fan speed prediction, emotion mood lighting, face recognition door, and voice control.">
     <title>Smart Home AI — Powered by AI/ML</title>
-    <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="stylesheet" href="/static/css/style.css?v=4">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.4/socket.io.min.js"></script>
 </head>
 <body>
@@ -60,17 +60,86 @@
             </div>
         </div>
 
-        <div class="card" style="text-align: center;">
-            <div class="card-title">Enter Temperature</div>
-            <div class="input-group" style="justify-content: center;">
-                <input type="number" id="temp-input" class="input-field" 
-                       placeholder="Enter temperature in °C" min="0" max="60" step="1">
-                <button class="btn btn-primary" id="predict-fan-btn" onclick="predictFanSpeed()">
-                    Initialize Prediction
-                </button>
+        <!-- Mode Toggle Tabs -->
+        <div class="fan-mode-tabs" id="fan-mode-tabs">
+            <button class="fan-mode-tab active" id="fan-tab-manual" onclick="switchFanMode('manual')">
+                <span class="fan-tab-icon">⌨️</span>
+                <span class="fan-tab-label">Manual Input</span>
+            </button>
+            <button class="fan-mode-tab" id="fan-tab-live" onclick="switchFanMode('live')">
+                <span class="fan-tab-icon">📍</span>
+                <span class="fan-tab-label">Live Location</span>
+            </button>
+        </div>
+
+        <!-- MODE 1: Manual Temperature Input -->
+        <div id="fan-manual-section" class="fan-section-active">
+            <div class="card" style="text-align: center;">
+                <div class="card-title">Enter Temperature</div>
+                <div class="input-group" style="justify-content: center;">
+                    <input type="number" id="temp-input" class="input-field" 
+                           placeholder="Enter temperature in °C" min="0" max="60" step="1">
+                    <button class="btn btn-primary" id="predict-fan-btn" onclick="predictFanSpeed()">
+                        Initialize Prediction
+                    </button>
+                </div>
             </div>
         </div>
 
+        <!-- MODE 2: Live Location Temperature -->
+        <div id="fan-live-section" class="fan-section-hidden">
+            <div class="card" style="text-align: center;">
+                <div class="card-title">Live Weather Temperature</div>
+                <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 16px;">
+                    Detect your device location and fetch real-time temperature to auto-predict fan speed
+                </p>
+                <button class="btn btn-primary" id="fetch-live-temp-btn" onclick="fetchLiveTemperature()">
+                    <span id="live-btn-text">Detect Location & Fetch Temperature</span>
+                </button>
+            </div>
+
+            <!-- Live Weather Data Card (hidden until fetched) -->
+            <div id="live-weather-card" class="live-weather-card" style="display: none;">
+                <div class="weather-card-header">
+                    <div class="weather-location">
+                        <span class="weather-location-icon">📍</span>
+                        <span class="weather-location-name" id="live-location-name">Detecting...</span>
+                    </div>
+                    <div class="weather-condition" id="live-weather-desc">—</div>
+                </div>
+
+                <div class="weather-main-temp">
+                    <span class="weather-temp-value" id="live-temp-value">—</span>
+                    <span class="weather-temp-unit">°C</span>
+                </div>
+
+                <div class="weather-details-grid">
+                    <div class="weather-detail-item">
+                        <div class="weather-detail-label">Feels Like</div>
+                        <div class="weather-detail-value" id="live-feels-like">—°C</div>
+                    </div>
+                    <div class="weather-detail-item">
+                        <div class="weather-detail-label">Humidity</div>
+                        <div class="weather-detail-value" id="live-humidity">—%</div>
+                    </div>
+                    <div class="weather-detail-item">
+                        <div class="weather-detail-label">Wind Speed</div>
+                        <div class="weather-detail-value" id="live-wind">— km/h</div>
+                    </div>
+                    <div class="weather-detail-item">
+                        <div class="weather-detail-label">Timezone</div>
+                        <div class="weather-detail-value" id="live-timezone">—</div>
+                    </div>
+                </div>
+
+                <div class="weather-auto-label">
+                    <span class="weather-auto-pulse"></span>
+                    Fan speed auto-computed from live temperature
+                </div>
+            </div>
+        </div>
+
+        <!-- Fan Result (shared between both modes) -->
         <div id="fan-result" style="display: none;">
             <div id="fan-loader" class="loader">
                 <div class="spinner"></div>
@@ -99,8 +168,8 @@
         </div>
 
         <div class="action-buttons" style="justify-content: center; margin-top: 40px;">
-            <button class="btn btn-secondary" onclick="goHome()">Back to Dashboard</button>
-            <button class="btn btn-secondary" onclick="resetFan()">Compute Again</button>
+            <button class="btn btn-secondary" onclick="goHome()">Back</button>
+            <button class="btn btn-secondary" onclick="resetFan()">Reset</button>
         </div>
     </div>
 
@@ -152,8 +221,8 @@
         </div>
 
         <div class="action-buttons" style="justify-content: center; margin-top: 40px;">
-            <button class="btn btn-secondary" onclick="goHome()">Back to Dashboard</button>
-            <button class="btn btn-secondary" onclick="resetEmotion()">Compute Again</button>
+            <button class="btn btn-secondary" onclick="goHome()">Back</button>
+            <button class="btn btn-secondary" onclick="resetEmotion()">Reset</button>
         </div>
     </div>
 
@@ -165,7 +234,7 @@
         <div class="page-header" style="justify-content: center; text-align: center; border-bottom: none; margin-bottom: 16px;">
             <div class="page-header-text">
                 <h2 style="font-size: 2.2rem; color: var(--accent-green);">Face Recognition Door</h2>
-                <p style="font-size: 1rem; color: var(--text-secondary);">Secure access using LBPH face recognition protocol</p>
+                <p style="font-size: 1rem; color: var(--text-secondary);">Secure access using intelligent face recognition technology</p>
             </div>
         </div>
 
@@ -205,8 +274,8 @@
         </div>
 
             <div class="action-buttons" style="justify-content: center; margin-top: 40px;">
-                <button class="btn btn-secondary" onclick="goHome()">Back to Dashboard</button>
-                <button class="btn btn-secondary" onclick="resetFaceScan()">Compute Again</button>
+                <button class="btn btn-secondary" onclick="goHome()">Back</button>
+                <button class="btn btn-secondary" onclick="resetFaceScan()">Reset</button>
                 <button class="btn btn-secondary" onclick="toggleFaceRegPage()">Manage Profiles</button>
             </div>
         </div>
@@ -301,7 +370,7 @@
             <div class="page-header" style="justify-content: center; text-align: center; border-bottom: none; margin-bottom: 16px;">
                 <div class="page-header-text">
                     <h2 style="font-size: 2.2rem; color: var(--accent-green);">Voice Control</h2>
-                    <p style="font-size: 1rem; color: var(--text-secondary);">Control devices with voice commands (English + Hindi)</p>
+                    <p style="font-size: 1rem; color: var(--text-secondary);">Control devices with voice commands</p>
                 </div>
             </div>
 
@@ -320,34 +389,63 @@
                     Commands: turn on/off fan, turn on/off light, open/close door
                 </p>
 
-                <!-- You Said Box -->
-                <div class="card mb-3" style="text-align: center; background: var(--surface-2);">
-                    <div style="color: var(--text-muted); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 5px;">You Said:</div>
-                    <div id="voice-said-text" style="font-size: 1.2rem; font-weight: 500; color: var(--accent-primary);">—</div>
-                </div>
-
-                <!-- Device Cards -->
-                <div class="device-cards">
-                    <div class="device-card" id="device-fan">
+                <!-- Animated Device Cards -->
+                <div class="device-cards-animated">
+                    <!-- Fan Device — spinning blades animation -->
+                    <div class="device-card-anim" id="device-fan">
                         <div class="device-card-name">Fan</div>
+                        <div class="device-anim-visual">
+                            <div class="voice-fan-visual">
+                                <div class="voice-fan-hub"></div>
+                                <div class="voice-fan-blades" id="voice-fan-blades">
+                                    <div class="voice-fan-blade"></div>
+                                    <div class="voice-fan-blade"></div>
+                                    <div class="voice-fan-blade"></div>
+                                    <div class="voice-fan-blade"></div>
+                                    <div class="voice-fan-blade"></div>
+                                </div>
+                            </div>
+                        </div>
                         <div class="device-card-status">OFF</div>
                     </div>
 
-                    <div class="device-card" id="device-light">
+                    <!-- Light Device — glowing bulb animation -->
+                    <div class="device-card-anim" id="device-light">
                         <div class="device-card-name">Light</div>
+                        <div class="device-anim-visual">
+                            <div class="voice-bulb-container">
+                                <div class="voice-bulb-wire"></div>
+                                <div class="voice-bulb-body" id="voice-light-bulb"></div>
+                                <div class="voice-bulb-base"></div>
+                            </div>
+                        </div>
                         <div class="device-card-status">OFF</div>
                     </div>
 
-                    <div class="device-card" id="device-door">
+                    <!-- Door Device — opening door animation -->
+                    <div class="device-card-anim" id="device-door">
                         <div class="device-card-name">Door</div>
+                        <div class="device-anim-visual">
+                            <div class="voice-door-container">
+                                <div class="voice-door-indicator" id="voice-door-indicator"></div>
+                                <div class="voice-door-frame">
+                                    <div class="voice-door-left" id="voice-door-left">
+                                        <div class="voice-door-handle"></div>
+                                    </div>
+                                    <div class="voice-door-right" id="voice-door-right">
+                                        <div class="voice-door-handle"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                         <div class="device-card-status">CLOSED</div>
                     </div>
                 </div>
             </div>
 
             <div class="action-buttons" style="justify-content: center; margin-top: 40px;">
-                <button class="btn btn-secondary" onclick="goHome()">Back to Dashboard</button>
-                <button class="btn btn-secondary" onclick="resetVoice()">Compute Again</button>
+                <button class="btn btn-secondary" onclick="goHome()">Back</button>
+                <button class="btn btn-secondary" onclick="resetVoice()">Reset</button>
                 <button class="btn btn-secondary" onclick="toggleVoiceRegPage()">
                     Manage Profiles
                 </button>
@@ -434,6 +532,6 @@
 
 </div>
 
-<script src="/static/js/app.js"></script>
+<script src="/static/js/app.js?v=3"></script>
 </body>
 </html>

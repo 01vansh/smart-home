@@ -123,8 +123,33 @@ function captureFrame(videoElementId) {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// FEATURE 1 — FAN SPEED CONTROL
+// FEATURE 1 — FAN SPEED CONTROL (Manual + Live Location)
 // ═══════════════════════════════════════════════════════════════════
+
+let currentFanMode = 'manual';
+
+function switchFanMode(mode) {
+    currentFanMode = mode;
+
+    // Toggle tab active state
+    document.getElementById('fan-tab-manual').classList.toggle('active', mode === 'manual');
+    document.getElementById('fan-tab-live').classList.toggle('active', mode === 'live');
+
+    // Toggle sections
+    const manualSection = document.getElementById('fan-manual-section');
+    const liveSection = document.getElementById('fan-live-section');
+
+    if (mode === 'manual') {
+        manualSection.className = 'fan-section-active';
+        liveSection.className = 'fan-section-hidden';
+    } else {
+        manualSection.className = 'fan-section-hidden';
+        liveSection.className = 'fan-section-active';
+    }
+
+    // Reset the fan result when switching modes
+    resetFan();
+}
 
 async function predictFanSpeed() {
     const tempInput = document.getElementById('temp-input');
@@ -158,26 +183,7 @@ async function predictFanSpeed() {
             return;
         }
 
-        // Update fan speed display
-        const speedNum = document.getElementById('fan-speed-num');
-        const speedLabel = document.getElementById('fan-speed-label');
-        const rangeLabel = document.getElementById('fan-range-label');
-        const fanBlades = document.getElementById('fan-blades');
-
-        safeText('fan-speed-num', data.speed);
-        safeText('fan-speed-label', `Speed ${data.speed}`);
-
-        // Set fan spinning speed
-        const speeds = { 1: '6s', 2: '4s', 3: '2.5s', 4: '1.5s', 5: '0.6s' };
-        fanBlades.style.setProperty('--fan-speed', speeds[data.speed] || '4s');
-        fanBlades.classList.add('spinning');
-
-        // Color based on speed
-        const colors = { 1: '#4a9eff', 2: '#1D9E75', 3: '#FFD700', 4: '#FF8C42', 5: '#ff4444' };
-        speedNum.style.color = colors[data.speed] || 'var(--accent-green)';
-
-        document.getElementById('fan-result-content').style.display = 'block';
-
+        displayFanResult(data);
         showToast(`Fan speed predicted: ${data.speed}`);
 
     } catch (e) {
@@ -187,6 +193,144 @@ async function predictFanSpeed() {
     }
 }
 
+function displayFanResult(data) {
+    const fanBlades = document.getElementById('fan-blades');
+
+    safeText('fan-speed-num', data.speed);
+    safeText('fan-speed-label', `Speed ${data.speed} — ${data.label} (${data.range})`);
+
+    // Set fan spinning speed
+    const speeds = { 1: '6s', 2: '4s', 3: '2.5s', 4: '1.5s', 5: '0.6s' };
+    fanBlades.style.setProperty('--fan-speed', speeds[data.speed] || '4s');
+    fanBlades.classList.add('spinning');
+
+    // Color based on speed
+    const colors = { 1: '#4a9eff', 2: '#1D9E75', 3: '#FFD700', 4: '#FF8C42', 5: '#ff4444' };
+    document.getElementById('fan-speed-num').style.color = colors[data.speed] || 'var(--accent-green)';
+
+    document.getElementById('fan-result-content').style.display = 'block';
+}
+
+async function fetchLiveTemperature() {
+    const btn = document.getElementById('fetch-live-temp-btn');
+    const btnText = document.getElementById('live-btn-text');
+
+    if (!navigator.geolocation) {
+        showToast('Geolocation is not supported by your browser', 'error');
+        return;
+    }
+
+    // Disable button and show loading state
+    btn.disabled = true;
+    btnText.textContent = 'Detecting location...';
+
+    // Show loader
+    const resultSection = document.getElementById('fan-result');
+    const loader = document.getElementById('fan-loader');
+    const resultContent = document.getElementById('fan-result-content');
+    resultSection.style.display = 'block';
+    loader.classList.add('active');
+    resultContent.style.display = 'none';
+
+    try {
+        // Step 1: Get GPS coordinates
+        const position = await new Promise((resolve, reject) => {
+            navigator.geolocation.getCurrentPosition(resolve, reject, {
+                enableHighAccuracy: true,
+                timeout: 15000,
+                maximumAge: 60000
+            });
+        });
+
+        const lat = position.coords.latitude;
+        const lon = position.coords.longitude;
+
+        btnText.textContent = 'Fetching weather data...';
+
+        // Step 2: Send coordinates to backend
+        const res = await fetch('/live_temperature', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ latitude: lat, longitude: lon })
+        });
+
+        const data = await res.json();
+        loader.classList.remove('active');
+
+        if (!data.success) {
+            showToast(data.error || 'Failed to fetch weather data', 'error');
+            btn.disabled = false;
+            btnText.textContent = 'Detect Location & Fetch Temperature';
+            resultSection.style.display = 'none';
+            return;
+        }
+
+        // Step 3: Display the live weather data
+        displayLiveWeather(data);
+
+        // Step 4: Display fan prediction from live temperature
+        if (data.fan_prediction) {
+            displayFanResult(data.fan_prediction);
+        }
+
+        showToast(`Live: ${data.temperature}°C at ${data.location} — Fan speed: ${data.fan_prediction?.speed}`);
+
+        btn.disabled = false;
+        btnText.textContent = 'Refresh Live Temperature';
+
+    } catch (err) {
+        loader.classList.remove('active');
+        resultSection.style.display = 'none';
+        btn.disabled = false;
+        btnText.textContent = 'Detect Location & Fetch Temperature';
+
+        if (err.code === 1) {
+            showToast('Location access denied. Please allow location permission.', 'error');
+        } else if (err.code === 2) {
+            showToast('Location unavailable. Check your device GPS.', 'error');
+        } else if (err.code === 3) {
+            showToast('Location request timed out. Try again.', 'error');
+        } else {
+            showToast(`Error: ${err.message}`, 'error');
+        }
+        console.error('[Live Temp]', err);
+    }
+}
+
+function displayLiveWeather(data) {
+    const weatherCard = document.getElementById('live-weather-card');
+
+    // Weather code to emoji mapping
+    const weatherEmojis = {
+        0: '☀️', 1: '🌤️', 2: '⛅', 3: '☁️',
+        45: '🌫️', 48: '🌫️', 51: '🌦️', 53: '🌧️',
+        55: '🌧️', 61: '🌦️', 63: '🌧️', 65: '🌧️',
+        71: '🌨️', 73: '❄️', 75: '❄️', 80: '🌦️',
+        81: '🌧️', 82: '⛈️', 95: '⛈️', 96: '⛈️', 99: '⛈️'
+    };
+
+    const weatherEmoji = weatherEmojis[data.weather_code] || '🌡️';
+
+    safeText('live-location-name', data.location);
+    document.getElementById('live-weather-desc').textContent = `${weatherEmoji} ${data.weather_description}`;
+    safeText('live-temp-value', data.temperature);
+    safeText('live-feels-like', `${data.apparent_temperature}°C`);
+    safeText('live-humidity', `${data.humidity}%`);
+    safeText('live-wind', `${data.wind_speed} km/h`);
+    safeText('live-timezone', data.timezone);
+
+    // Color the temperature based on value
+    const tempEl = document.getElementById('live-temp-value');
+    if (data.temperature <= 15) tempEl.style.color = '#4a9eff';
+    else if (data.temperature <= 20) tempEl.style.color = '#1D9E75';
+    else if (data.temperature <= 25) tempEl.style.color = '#FFD700';
+    else if (data.temperature <= 30) tempEl.style.color = '#FF8C42';
+    else tempEl.style.color = '#ff4444';
+
+    weatherCard.style.display = 'block';
+    weatherCard.style.animation = 'fadeSlideIn 0.5s ease forwards';
+}
+
 function resetFan() {
     document.getElementById('temp-input').value = '';
     document.getElementById('fan-blades').classList.remove('spinning');
@@ -194,7 +338,18 @@ function resetFan() {
     document.getElementById('fan-result').style.display = 'none';
     safeText('fan-speed-num', '—');
     safeText('fan-speed-label', 'Enter temperature to predict');
+
+    // Reset live weather card
+    const weatherCard = document.getElementById('live-weather-card');
+    if (weatherCard) weatherCard.style.display = 'none';
+
+    const liveBtn = document.getElementById('fetch-live-temp-btn');
+    if (liveBtn) {
+        liveBtn.disabled = false;
+        safeText('live-btn-text', 'Detect Location & Fetch Temperature');
+    }
 }
+
 
 // ═══════════════════════════════════════════════════════════════════
 // FEATURE 2 — EMOTION DETECTION (Webcam Only)
@@ -300,9 +455,9 @@ function resetEmotion() {
 
     const room = document.getElementById('emotion-room');
     const bulb = document.getElementById('emotion-bulb');
-    room.style.backgroundColor = '#111';
+    room.style.backgroundColor = '#e8ecf1';
     bulb.classList.remove('glowing');
-    bulb.style.background = '#333';
+    bulb.style.background = '#d1d5db';
     bulb.style.boxShadow = 'none';
 
     document.getElementById('emotion-result').classList.add('hidden');
@@ -819,9 +974,7 @@ async function stopVoiceCommand() {
             const data = await res.json();
             
             if (data.text) {
-                safeText('voice-said-text', data.text);
-            } else {
-                safeText('voice-said-text', "—");
+                showToast(`You said: "${data.text}"`, 'info');
             }
 
             if (data.success) {
@@ -853,31 +1006,65 @@ async function loadDeviceStatus() {
 function updateDeviceCards(states) {
     if (!states) return;
 
-    // Fan
+    // Fan — spinning animation
     const fanCard = document.getElementById('device-fan');
     if (fanCard) {
         fanCard.classList.toggle('active', states.fan);
         safeQueryText(fanCard, '.device-card-status', states.fan ? 'ON' : 'OFF');
+        const fanBlades = document.getElementById('voice-fan-blades');
+        if (fanBlades) {
+            if (states.fan) {
+                fanBlades.classList.add('spinning');
+                fanBlades.style.setProperty('--fan-speed', '1.5s');
+            } else {
+                fanBlades.classList.remove('spinning');
+            }
+        }
     }
 
-    // Light
+    // Light — glowing bulb animation
     const lightCard = document.getElementById('device-light');
     if (lightCard) {
         lightCard.classList.toggle('active', states.light);
         safeQueryText(lightCard, '.device-card-status', states.light ? 'ON' : 'OFF');
+        const bulb = document.getElementById('voice-light-bulb');
+        if (bulb) {
+            if (states.light) {
+                bulb.classList.add('glowing');
+                bulb.style.setProperty('--bulb-color', '#FFD700');
+                bulb.style.background = '#FFD700';
+                bulb.style.boxShadow = '0 0 30px #FFD700, 0 0 60px #FFD700, 0 0 90px rgba(255, 215, 0, 0.3)';
+            } else {
+                bulb.classList.remove('glowing');
+                bulb.style.background = '#d1d5db';
+                bulb.style.boxShadow = 'none';
+            }
+        }
     }
 
-    // Door
+    // Door — opening/closing animation
     const doorCard = document.getElementById('device-door');
     if (doorCard) {
         doorCard.classList.toggle('active', states.door);
         safeQueryText(doorCard, '.device-card-status', states.door ? 'OPEN' : 'CLOSED');
+        const doorLeft = document.getElementById('voice-door-left');
+        const doorRight = document.getElementById('voice-door-right');
+        const doorIndicator = document.getElementById('voice-door-indicator');
+        if (doorLeft && doorRight) {
+            if (states.door) {
+                doorLeft.classList.add('open');
+                doorRight.classList.add('open');
+                if (doorIndicator) doorIndicator.className = 'voice-door-indicator granted';
+            } else {
+                doorLeft.classList.remove('open');
+                doorRight.classList.remove('open');
+                if (doorIndicator) doorIndicator.className = 'voice-door-indicator';
+            }
+        }
     }
 }
 
 function resetVoice() {
-    safeText('voice-said-text', '—');
-
     // Reset all devices to OFF
     fetch('/execute_command', {
         method: 'POST',

@@ -916,79 +916,265 @@ function stopWavRecording() {
 
 // ═══════════════════════════════════════════════════════════════════
 // FEATURE 4 — VOICE CONTROL
+// Simple flow: TAP → browser listens → auto-stops → animate devices
 // ═══════════════════════════════════════════════════════════════════
 
-// Push-to-Talk Logic
-let isCommandRecording = false;
+let _sr        = null;    // SpeechRecognition instance
+let _srActive  = false;   // is mic open right now?
+let _srText    = '';      // confirmed words so far
+let _srRetries = 0;
+const _SR_MAX  = 2;       // max silent retries before giving up
 
-function toggleVoiceCommand() {
-    if (isCommandRecording) {
-        stopVoiceCommand();
-    } else {
-        startVoiceCommand();
+// ── Helpers ────────────────────────────────────────────────────────
+function _vStatus(msg)  { safeText('voice-listen-status', msg); }
+
+function _vBtn(state) {
+    const btn  = document.getElementById('voice-listen-btn');
+    const icon = btn && btn.querySelector('.mic-speak-icon');
+    const live = document.getElementById('voice-live-words');
+    if (!btn) return;
+    btn.classList.remove('listening');
+    btn.style.background = '';
+    btn.disabled = (state === 'processing');
+
+    if (state === 'idle') {
+        if (icon) icon.textContent = '🎙️';
+        _vStatus('Tap to speak a command');
+        if (live) { live.classList.remove('active'); setTimeout(() => { if(live) live.textContent = ''; }, 350); }
+
+    } else if (state === 'listening') {
+        if (icon) icon.textContent = '🔴';
+        btn.classList.add('listening');
+        _vStatus('Listening… speak your command now');
+        if (live) { live.textContent = ''; live.classList.add('active'); }
+
+    } else if (state === 'processing') {
+        if (icon) icon.textContent = '⏳';
+        btn.style.background = 'linear-gradient(135deg,#7c3aed,#6366f1)';
+        _vStatus('Processing your command…');
     }
 }
 
-async function startVoiceCommand() {
-    if (isCommandRecording) return;
+function _vLive(text) {
+    const live = document.getElementById('voice-live-words');
+    if (!live) return;
+    live.textContent = text || '';
+    if (text) live.classList.add('active');
+}
+
+// ── Toggle (single tap starts, second tap stops early) ─────────────
+function toggleVoiceCommand() {
+    if (_srActive) {
+        // User tapped to stop early → _sr.stop() → onend fires → process
+        if (_sr) { try { _sr.stop(); } catch(e) {} }
+        _vBtn('processing');
+    } else {
+        _startListening();
+    }
+}
+
+function startVoiceCommand()  { if (!_srActive) _startListening(); }
+function stopVoiceCommand()   { toggleVoiceCommand(); }
+function _resetVoiceBtn()     { _vBtn('idle'); }
+
+// ── Start one recognition session ──────────────────────────────────
+function _startListening() {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+    if (!SR) {
+        showToast('Voice commands need Chrome or Edge browser. Please switch browser.', 'error');
+        _vStatus('Not supported — use Chrome or Edge');
+        return;
+    }
+
+    _sr       = new SR();
+    _sr.lang            = 'en-IN';
+    _sr.interimResults  = true;
+    _sr.maxAlternatives = 5;
+    _sr.continuous      = false;   // single utterance — most reliable
+
+    _srActive = true;
+    _srText   = '';
+    _vBtn('listening');
+
+    // ── Collect words in real time ──────────────────────────────────
+    _sr.onresult = (ev) => {
+        let interim = '';
+        for (let i = ev.resultIndex; i < ev.results.length; i++) {
+            const t = ev.results[i][0].transcript;
+            if (ev.results[i].isFinal) _srText += ' ' + t;
+            else interim = t;
+        }
+        _vLive((_srText + ' ' + interim).trim());
+    };
+
+    // ── Auto-called when browser finishes listening ─────────────────
+    _sr.onend = () => {
+        _srActive = false;
+        _sr = null;
+        _runCommand();
+    };
+
+    // ── User-friendly error messages ────────────────────────────────
+    _sr.onerror = (ev) => {
+        const err = ev.error;
+        console.warn('[Voice]', err);
+
+        // 'aborted' = we called stop() manually → onend handles it → ignore
+        if (err === 'aborted') return;
+
+        _srActive = false;
+        _sr = null;
+
+        if (err === 'no-speech') {
+            // Silently retry — user might just be slow
+            if (_srRetries < _SR_MAX) {
+                _srRetries++;
+                _vStatus('Still listening… please speak');
+                setTimeout(() => _startListening(), 400);
+            } else {
+                _srRetries = 0;
+                _vBtn('idle');
+                showToast(
+                    '🔇 Could not hear you. Try:\n• Speak louder\n• Move to a quieter place\n• Hold phone closer',
+                    'error'
+                );
+            }
+            return;
+        }
+
+        if (err === 'network') {
+            if (_srRetries < _SR_MAX) {
+                _srRetries++;
+                _vStatus('Connection hiccup… retrying');
+                setTimeout(() => _startListening(), 700 * _srRetries);
+            } else {
+                _srRetries = 0;
+                _vBtn('idle');
+                showToast('📶 Network error. Check your internet and try again.', 'error');
+            }
+            return;
+        }
+
+        if (err === 'audio-capture') {
+            _vBtn('idle');
+            showToast('🎤 Cannot access microphone. Is another app using it?', 'error');
+            return;
+        }
+
+        if (err === 'not-allowed') {
+            _vBtn('idle');
+            showToast('🔒 Microphone blocked! Click the lock icon 🔒 in your browser address bar → allow Microphone.', 'error');
+            return;
+        }
+
+        // Catch-all
+        _vBtn('idle');
+        showToast('Something went wrong. Please try again.', 'error');
+    };
 
     try {
-        await startWavRecording();
-        isCommandRecording = true;
-        safeText('voice-listen-status', 'Listening... Click to stop');
-        document.getElementById('voice-listen-btn').style.transform = 'scale(1.1)';
-        document.getElementById('voice-listen-btn').style.background = 'var(--accent-red)';
+        _sr.start();
     } catch (e) {
-        isCommandRecording = false;
-        showToast('Microphone access denied', 'error');
+        _srActive = false;
+        _vBtn('idle');
+        showToast('Could not start microphone. Please try again.', 'error');
     }
 }
 
-async function stopVoiceCommand() {
-    if (!isCommandRecording) return;
-    isCommandRecording = false;
-    
-    const statusEl = document.getElementById('voice-listen-status');
-    safeText('voice-listen-status', 'Processing...');
-    document.getElementById('voice-listen-btn').style.transform = 'scale(1)';
-    document.getElementById('voice-listen-btn').style.background = 'var(--accent-primary)';
-    
+// ── Send captured text to backend → execute command ─────────────────
+async function _runCommand() {
+    const text = _srText.trim();
+    _srText    = '';
+    _srRetries = 0;
+
+    const live = document.getElementById('voice-live-words');
+
+    if (!text) {
+        _vBtn('idle');
+        showToast('Nothing was captured. Please try speaking again.', 'error');
+        return;
+    }
+
+    _vBtn('processing');
+
+    try {
+        const res  = await fetch('/recognize_text', {
+            method : 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body   : JSON.stringify({ text })
+        });
+        const data = await res.json();
+
+        if (data.success) {
+            // Show result in live box
+            if (live) { live.textContent = '✅ ' + data.message; live.classList.add('active'); }
+            _vStatus(data.message);
+            // Animate the correct device card
+            if (data.device_states) updateDeviceCards(data.device_states, data.changed_device);
+            // Reset after 2.5 s
+            setTimeout(() => { _vBtn('idle'); }, 2500);
+        } else {
+            const hint = '💡 Try saying: "turn on fan", "turn off light", or "open door"';
+            showToast((data.message || 'Command not recognized') + '\n' + hint, 'error');
+            _vBtn('idle');
+            if (live) { live.classList.remove('active'); live.textContent = ''; }
+        }
+    } catch (e) {
+        showToast('⚠️ Server error. Make sure the app is running and try again.', 'error');
+        _vBtn('idle');
+        if (live) { live.classList.remove('active'); live.textContent = ''; }
+    }
+}
+
+// ── Vosk/Whisper fallback for non-Web-Speech-API browsers ──────────
+let _voskRecording = false;
+let isCommandRecording = false;   // kept for legacy compatibility
+
+async function _fallbackVosk() {
+    if (_voskRecording) return;
+    try {
+        await startWavRecording();
+        _voskRecording     = true;
+        isCommandRecording = true;
+        _vStatus('Listening (offline mode)… tap again to stop');
+        const btn2 = document.getElementById('voice-listen-btn');
+        if (btn2) btn2.classList.add('listening');
+    } catch (e) {
+        _voskRecording     = false;
+        isCommandRecording = false;
+        showToast('Microphone access denied.', 'error');
+    }
+}
+
+function _stopVoskFallback() {
+    if (!_voskRecording) return;
+    _voskRecording = false;
+    _vStatus('Processing…');
+
     const wavBlob = stopWavRecording();
-    const reader = new FileReader();
-    
+    const reader  = new FileReader();
+
     reader.onload = async (e) => {
         try {
             const base64 = e.target.result.split(',')[1];
-            
-            const res = await fetch('/process_voice', {
-                method: 'POST',
+            const res    = await fetch('/process_voice', {
+                method : 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ audio: base64 })
+                body   : JSON.stringify({ audio: base64 })
             });
-
-            if (!res.ok) {
-                const errorMsg = await res.text();
-                throw new Error(`Server returned ${res.status}: ${errorMsg.substring(0, 50)}`);
-            }
-
+            if (!res.ok) throw new Error(`Server ${res.status}`);
             const data = await res.json();
-            
-            if (data.text) {
-                showToast(`You said: "${data.text}"`, 'info');
-            }
-
             if (data.success) {
                 showToast(data.message);
-                if (data.device_states) updateDeviceCards(data.device_states);
+                if (data.device_states) updateDeviceCards(data.device_states, data.changed_device);
             } else {
-                showToast(data.message || data.error || 'Recognition failed', 'error');
+                showToast(data.message || 'Recognition failed', 'error');
             }
-            safeText('voice-listen-status', 'Click to speak');
         } catch (err) {
-            console.error('[Voice] Fetch error:', err);
             showToast(`Error: ${err.message}`, 'error');
-            safeText('voice-listen-status', 'Click to speak');
         }
+        _vBtn('idle');
     };
     reader.readAsDataURL(wavBlob);
 }
@@ -1003,13 +1189,14 @@ async function loadDeviceStatus() {
     }
 }
 
-function updateDeviceCards(states) {
+function updateDeviceCards(states, changedDevice) {
     if (!states) return;
 
-    // Fan — spinning animation
+    // ── Fan ────────────────────────────────────────────────────────
     const fanCard = document.getElementById('device-fan');
     if (fanCard) {
-        fanCard.classList.toggle('active', states.fan);
+        const wasOn = fanCard.classList.contains('active');
+        fanCard.classList.toggle('active', !!states.fan);
         safeQueryText(fanCard, '.device-card-status', states.fan ? 'ON' : 'OFF');
         const fanBlades = document.getElementById('voice-fan-blades');
         if (fanBlades) {
@@ -1020,35 +1207,37 @@ function updateDeviceCards(states) {
                 fanBlades.classList.remove('spinning');
             }
         }
+        // Flash if this device just changed
+        if (changedDevice === 'fan' || (!changedDevice && wasOn !== !!states.fan)) flashCard(fanCard);
     }
 
-    // Light — glowing bulb animation
+    // ── Light ──────────────────────────────────────────────────────
     const lightCard = document.getElementById('device-light');
     if (lightCard) {
-        lightCard.classList.toggle('active', states.light);
+        const wasOn = lightCard.classList.contains('active');
+        lightCard.classList.toggle('active', !!states.light);
         safeQueryText(lightCard, '.device-card-status', states.light ? 'ON' : 'OFF');
         const bulb = document.getElementById('voice-light-bulb');
         if (bulb) {
             if (states.light) {
-                bulb.classList.add('glowing');
-                bulb.style.setProperty('--bulb-color', '#FFD700');
                 bulb.style.background = '#FFD700';
-                bulb.style.boxShadow = '0 0 30px #FFD700, 0 0 60px #FFD700, 0 0 90px rgba(255, 215, 0, 0.3)';
+                bulb.style.boxShadow  = '0 0 30px #FFD700, 0 0 60px #FFD700, 0 0 90px rgba(255,215,0,0.3)';
             } else {
-                bulb.classList.remove('glowing');
                 bulb.style.background = '#d1d5db';
-                bulb.style.boxShadow = 'none';
+                bulb.style.boxShadow  = 'none';
             }
         }
+        if (changedDevice === 'light' || (!changedDevice && wasOn !== !!states.light)) flashCard(lightCard);
     }
 
-    // Door — opening/closing animation
+    // ── Door ───────────────────────────────────────────────────────
     const doorCard = document.getElementById('device-door');
     if (doorCard) {
-        doorCard.classList.toggle('active', states.door);
+        const wasOpen = doorCard.classList.contains('active');
+        doorCard.classList.toggle('active', !!states.door);
         safeQueryText(doorCard, '.device-card-status', states.door ? 'OPEN' : 'CLOSED');
-        const doorLeft = document.getElementById('voice-door-left');
-        const doorRight = document.getElementById('voice-door-right');
+        const doorLeft      = document.getElementById('voice-door-left');
+        const doorRight     = document.getElementById('voice-door-right');
         const doorIndicator = document.getElementById('voice-door-indicator');
         if (doorLeft && doorRight) {
             if (states.door) {
@@ -1061,6 +1250,7 @@ function updateDeviceCards(states) {
                 if (doorIndicator) doorIndicator.className = 'voice-door-indicator';
             }
         }
+        if (changedDevice === 'door' || (!changedDevice && wasOpen !== !!states.door)) flashCard(doorCard);
     }
 }
 

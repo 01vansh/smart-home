@@ -942,6 +942,140 @@ body {
     border: 1px solid #a0aab6;
 }
 
+/* ─── SPEAK (MIC) BUTTON ──────────────────────────────────────────── */
+.mic-speak-btn {
+    width: 130px;
+    height: 130px;
+    border-radius: 50%;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    margin: 0 auto;
+    font-family: 'Inter', sans-serif;
+    user-select: none;
+    position: relative;
+    transition: transform 0.25s ease, box-shadow 0.25s ease;
+
+    /* Vivid gradient — always clearly visible */
+    background: linear-gradient(135deg, #6366f1 0%, #0ea5e9 100%);
+    box-shadow: 0 6px 30px rgba(99, 102, 241, 0.45),
+                0 0 0 0 rgba(99, 102, 241, 0.3);
+    animation: speakRingIdle 2.4s ease-in-out infinite;
+}
+
+/* Idle ring pulse so it feels "alive" even before use */
+@keyframes speakRingIdle {
+    0%, 100% { box-shadow: 0 6px 30px rgba(99,102,241,0.45), 0 0 0 0   rgba(99,102,241,0.3); }
+    50%       { box-shadow: 0 6px 30px rgba(99,102,241,0.45), 0 0 0 14px rgba(99,102,241,0.0); }
+}
+
+.mic-speak-btn:hover {
+    transform: scale(1.06);
+    box-shadow: 0 8px 36px rgba(99, 102, 241, 0.55),
+                0 0 0 0 rgba(99, 102, 241, 0.3);
+}
+
+/* LISTENING state — red glow + pulsing ring */
+.mic-speak-btn.listening {
+    background: linear-gradient(135deg, #ef4444 0%, #f97316 100%);
+    animation: speakRingActive 1.2s ease-in-out infinite;
+    transform: scale(1.1);
+}
+
+@keyframes speakRingActive {
+    0%, 100% { box-shadow: 0 8px 36px rgba(239,68,68,0.5), 0 0 0 0   rgba(239,68,68,0.4); }
+    50%       { box-shadow: 0 8px 36px rgba(239,68,68,0.5), 0 0 0 20px rgba(239,68,68,0.0); }
+}
+
+.mic-speak-icon {
+    font-size: 2rem;
+    line-height: 1;
+}
+
+.mic-speak-label {
+    font-size: 0.75rem;
+    font-weight: 800;
+    letter-spacing: 2px;
+    color: #ffffff;
+    text-transform: uppercase;
+}
+
+/* Voice status text */
+.voice-status-text {
+    margin-top: 14px;
+    color: var(--text-secondary);
+    font-weight: 500;
+    font-size: 0.95rem;
+    min-height: 1.4em;
+    transition: color 0.3s ease;
+}
+
+/* Live transcript preview box */
+.voice-live-preview {
+    display: none;
+    margin: 10px auto 0;
+    max-width: 400px;
+    background: rgba(99, 102, 241, 0.06);
+    border: 1px solid rgba(99, 102, 241, 0.25);
+    border-radius: 12px;
+    padding: 10px 18px;
+    color: #6366f1;
+    font-size: 0.95rem;
+    font-style: italic;
+    text-align: center;
+    min-height: 38px;
+    transition: all 0.3s ease;
+}
+
+/* ─── LIVE WORDS BOX ─────────────────────────────────────────────── */
+.voice-live-words {
+    max-width: 460px;
+    margin: 0 auto 18px;
+    overflow: hidden;
+    max-height: 0;
+    opacity: 0;
+    border-radius: 14px;
+    transition: max-height 0.4s ease, opacity 0.35s ease, padding 0.35s ease;
+    padding: 0 20px;
+    font-size: 1.05rem;
+    font-weight: 500;
+    font-style: italic;
+    color: #6366f1;
+    text-align: center;
+    background: rgba(99, 102, 241, 0.07);
+    border: 1px solid rgba(99, 102, 241, 0.22);
+    letter-spacing: 0.01em;
+    line-height: 1.5;
+    word-break: break-word;
+}
+
+.voice-live-words.active {
+    max-height: 120px;
+    opacity: 1;
+    padding: 12px 20px;
+    animation: liveWordsPulse 2s ease-in-out infinite;
+}
+
+@keyframes liveWordsPulse {
+    0%, 100% { border-color: rgba(99,102,241,0.22); }
+    50%       { border-color: rgba(99,102,241,0.55); }
+}
+
+/* Device card — command-received flash */
+@keyframes cmdFlash {
+    0%   { box-shadow: 0 4px 25px rgba(14,165,233,0.12); }
+    40%  { box-shadow: 0 0 0 8px rgba(14,165,233,0.25), 0 4px 30px rgba(14,165,233,0.35); }
+    100% { box-shadow: 0 4px 25px rgba(14,165,233,0.12); }
+}
+
+.device-card-anim.cmd-flash {
+    animation: cmdFlash 0.7s ease forwards;
+}
+
 .door-left {
     left: 0;
     transform-origin: left center;

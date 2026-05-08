@@ -7,7 +7,7 @@ opencv-contrib-python-headless==4.8.0.74
 Pillow==9.5.0
 scikit-learn==1.3.0
 joblib==1.3.0
-vosk==0.3.45
+openai-whisper
 tensorflow-cpu==2.14.0
 gunicorn==21.2.0
 requests==2.31.0

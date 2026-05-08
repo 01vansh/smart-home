@@ -49,9 +49,8 @@ def init_models():
     # Feature 3: Face Authentication
     face_authenticator.train()
 
-    # Feature 4: Voice Controller
-    voice_controller.load_vosk_model()
-    # SpeechBrain loads on demand to save startup time
+    # Feature 4: Voice Controller (Whisper — free, offline, no API key)
+    voice_controller.load_whisper_model()
 
     print("\n" + "=" * 60)
     print("  All models initialized! Server ready.")
@@ -334,6 +333,48 @@ def verify_voice():
         return jsonify(result)
     except Exception as e:
         return jsonify({"success": False, "message": str(e), "error": str(e)}), 500
+
+@app.route('/recognize_text', methods=['POST'])
+def recognize_text():
+    """
+    NEW — Web Speech API path.
+    Receives already-transcribed text from the browser (Google STT),
+    skips Vosk, goes straight to command parsing and execution.
+    """
+    try:
+        data = request.get_json()
+        text = (data.get('text') or '').strip()
+
+        if not text:
+            return jsonify({"success": False, "message": "No text received", "error": "empty text"}), 400
+
+        print(f"[Voice/WebSpeech] Received text: '{text}'")
+
+        # Parse the command
+        cmd = voice_controller.parse_command(text)
+        if not cmd.get("found"):
+            return jsonify({
+                "success": False,
+                "message": f"Command not understood: \"{text}\". Try: 'turn on fan', 'turn off light', 'open door'",
+                "text": text,
+                "device_states": voice_controller.get_device_states()
+            })
+
+        # Execute the command
+        result = voice_controller.execute_command(cmd["device"], cmd["action"])
+        return jsonify({
+            "success": True,
+            "text": text,
+            "device": cmd["device"],
+            "action": cmd["action"],
+            "changed_device": cmd["device"],
+            "message": result["message"],
+            "device_states": voice_controller.get_device_states()
+        })
+
+    except Exception as e:
+        return jsonify({"success": False, "message": str(e), "error": str(e)}), 500
+
 
 @app.route('/process_voice', methods=['POST'])
 def process_voice():
